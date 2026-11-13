@@ -1,0 +1,7 @@
+# dsh-model-prompt bundle layer.
+# `name` is the package name resolved through the profile's node_modules, and
+# `id` is this plugin's Loader identity (matching `export const name` in src/index.ts).
+# The default config needs no overrides; see README.md for every key.
+- insert:
+    - id: model-prompt
+      name: dsh-model-prompt

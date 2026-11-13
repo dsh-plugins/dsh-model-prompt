@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Model Prompts",
+    "description": "Inject per-model guidance into the system prompt by matching prompt files, replacing the prompt head when the model changes."
+  }
+}
