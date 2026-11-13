@@ -1,0 +1,10 @@
+{
+  "name": "@dsh-plugin/dsh-model-prompt",
+  "latest": "0.0.1",
+  "publishedAt": "2026-11-13T17:28:54.227Z",
+  "dist": {
+    "tarball": "https://registry.npmjs.org/@dsh-plugin/dsh-model-prompt/-/dsh-model-prompt-0.0.1.tgz",
+    "integrity": "sha512-A6iDKiiOI39sV1qmU6yqaw9fp9nZHLwFXL1VYHEqdZcJE+xePtaIovFdBLws3OgQY9StzC3JapG4UG9WD8XYXw==",
+    "unpackedSize": 43529
+  }
+}
