@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
-import { contributionDigest, recoverBaselineDigest } from '../src/baseline.ts'
+import { contributionDigest, recoverBaselineDigest, sessionShowsContribution } from '../src/baseline.ts'
 import type { SessionEventLike } from '../src/host'
 
 /** 用序号到事件的映射构造表面读接口，模拟宿主 `surface.nodes` + `eventAt`。 */
@@ -82,5 +82,51 @@ describe('recoverBaselineDigest', () => {
   test('eventAt 查不到序号时跳过该节点', () => {
     const events = new Map<number, SessionEventLike>([[1, pluginMessage('可用')]])
     assert.equal(recoverBaselineDigest(session([99, 1], events)), '可用')
+  })
+})
+
+describe('sessionShowsContribution', () => {
+  const contribution = '以下为当前模型 acme/m 的专用指导。'
+
+  function systemMessage(text: string): SessionEventLike {
+    return { type: 'system/message', data: { message: { content: [{ type: 'text', text }] } } }
+  }
+
+  test('contributions 为空串时恒为 true', () => {
+    assert.equal(sessionShowsContribution(session([], new Map()), ''), true)
+  })
+
+  test('最新系统消息已包含贡献时返回 true', () => {
+    const events = new Map<number, SessionEventLike>([
+      [1, systemMessage('旧内容')],
+      [2, systemMessage(`开头\n\n${contribution}`)],
+    ])
+    assert.equal(sessionShowsContribution(session([1, 2], events), contribution), true)
+  })
+
+  test('插件缺席期间被重写为不含贡献的文本时返回 false', () => {
+    const events = new Map<number, SessionEventLike>([[1, systemMessage('只剩其他段落')]])
+    assert.equal(sessionShowsContribution(session([1], events), contribution), false)
+  })
+
+  test('跳过空文本的休眠节点，只看真正生效的那条', () => {
+    const events = new Map<number, SessionEventLike>([
+      [1, systemMessage(`开头\n\n${contribution}`)],
+      [2, systemMessage('')],
+    ])
+    assert.equal(sessionShowsContribution(session([1, 2], events), contribution), true)
+  })
+
+  test('表面没有系统消息时返回 false', () => {
+    const events = new Map<number, SessionEventLike>([[1, { type: 'user/message', data: {} }]])
+    assert.equal(sessionShowsContribution(session([1], events), contribution), false)
+  })
+
+  test('结构异常的系统消息不会抛错', () => {
+    const events = new Map<number, SessionEventLike>([
+      [1, { type: 'system/message', data: null }],
+      [2, systemMessage(contribution)],
+    ])
+    assert.equal(sessionShowsContribution(session([1, 2], events), contribution), true)
   })
 })

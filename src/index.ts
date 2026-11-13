@@ -3,7 +3,7 @@ import chokidar from 'chokidar'
 import type { Context } from '@deepseek-ai/cordis'
 import { Config } from './config.ts'
 import type { Config as PluginConfig } from './config.ts'
-import { contributionDigest, recoverBaselineDigest } from './baseline.ts'
+import { contributionDigest, recoverBaselineDigest, sessionShowsContribution } from './baseline.ts'
 import { errorMessage } from './error.ts'
 import type { ModelSelection } from './host.ts'
 import { promptNotice, renderPrompt } from './prompt.ts'
@@ -61,11 +61,15 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
     const contribution = render(payload.modelSelection)
     const current = contributionDigest(contribution)
     // 只在内存基线缺失（重启、恢复会话、插件重载）时遍历会话表面。
-    const previous = previousBySession.get(payload.agent.session)
-      ?? recoverBaselineDigest(payload.agent.session) ?? ''
+    const remembered = previousBySession.get(payload.agent.session)
+    const previous = remembered ?? recoverBaselineDigest(payload.agent.session) ?? ''
     previousBySession.set(payload.agent.session, current)
-    if (current === previous) return decision
-    const notice = promptNotice(getSnapshot(), payload.modelSelection)
+    // 摘要相同也可能与真实头部不一致：插件缺席期间宿主会用不含本插件段落的
+    // 文本重写头部。内存基线缺失时对照一次真实文本，必要时补一次头部替换。
+    const headStale = remembered === undefined
+      && !sessionShowsContribution(payload.agent.session, contribution)
+    if (current === previous && !headStale) return decision
+    const notice = current === previous ? undefined : promptNotice(getSnapshot(), payload.modelSelection)
     return {
       ...decision,
       // 「上下文注入」列表只渲染 user/developer 消息，系统提示词段落不会出现在那里；
