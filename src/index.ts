@@ -13,7 +13,7 @@ import { resolveRoots, scanPromptRoots } from './scan.ts'
 export { Config }
 
 /** 插件名必须与 package.json 的 name 完全一致，注册表查询与日志都依赖它。 */
-export const name = 'dsh-model-prompt'
+export const name = '@dsh-plugin/dsh-model-prompt'
 
 /** 严格注入检查要求列出 apply 内访问的全部服务。 */
 export const inject = ['systemPrompt']

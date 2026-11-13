@@ -1,5 +1,5 @@
 {
-  "name": "dsh-model-prompt",
+  "name": "@dsh-plugin/dsh-model-prompt",
   "version": "0.1.0",
   "description": "按当前模型匹配提示词文件，向系统提示词注入模型专用指导，并在模型切换时替换头部",
   "license": "MIT",

@@ -4,4 +4,4 @@
 # The default config needs no overrides; see README.md for every key.
 - insert:
     - id: model-prompt
-      name: dsh-model-prompt
+      name: '@dsh-plugin/dsh-model-prompt'
