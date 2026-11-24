@@ -60,16 +60,19 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
     if (decision.kind === 'reject') return decision
     const contribution = render(payload.modelSelection)
     const current = contributionDigest(contribution)
-    // 只在内存基线缺失（重启、恢复会话、插件重载）时遍历会话表面。
     const remembered = previousBySession.get(payload.agent.session)
     const previous = remembered ?? recoverBaselineDigest(payload.agent.session) ?? ''
     previousBySession.set(payload.agent.session, current)
-    // 摘要相同也可能与真实头部不一致：插件缺席期间宿主会用不含本插件段落的
-    // 文本重写头部。内存基线缺失时对照一次真实文本，必要时补一次头部替换。
-    const headStale = remembered === undefined
-      && !sessionShowsContribution(payload.agent.session, contribution)
-    if (current === previous && !headStale) return decision
-    const notice = current === previous ? undefined : promptNotice(getSnapshot(), payload.modelSelection)
+    // 「本插件上次贡献了什么」与「注入此刻是否真的在生效」是两件事。宿主会用不含
+    // 本段落的文本重写系统提示词：压缩后强制开始新请求系列时会走规范化分支，
+    // 那一步若提示词目录暂时为空，渲染结果里就没有本段落，头部会被整段替换掉。
+    // 文件内容回到原样后渲染结果与内存基线完全相同，只比摘要会判定「没有变化」，
+    // 注入就此一直缺失到进程重启。因此每步都对照真实文本，不能只在基线缺失时查。
+    const stale = !sessionShowsContribution(payload.agent.session, contribution)
+    if (current === previous && !stale) return decision
+    // 摘要相同但文本已丢失时也要补通知：界面那行「上下文注入」同样会被压缩遮蔽，
+    // 不重发的话用户看不到注入已经恢复。
+    const notice = promptNotice(getSnapshot(), payload.modelSelection)
     return {
       ...decision,
       // 「上下文注入」列表只渲染 user/developer 消息，系统提示词段落不会出现在那里；
