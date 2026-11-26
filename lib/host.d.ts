@@ -73,6 +73,11 @@ export interface PreStepPayload {
 }
 declare module '@deepseek-ai/cordis' {
     interface Context {
+        /** DSH CLI 启动时提供的活动配置档及其 DSH 根目录。 */
+        readonly profileContext: {
+            readonly dir: string;
+            readonly home: string;
+        };
         readonly systemPrompt: SystemPromptService;
     }
     interface Events {

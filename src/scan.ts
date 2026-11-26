@@ -26,35 +26,42 @@ export async function scanPromptRoots(
   maxBytes: number,
   warn: Warn,
 ): Promise<PromptSnapshot> {
-  const entries: PromptEntry[] = []
+  const entries = new Map<string, PromptEntry>()
   for (const root of roots) {
-    entries.push(...await scanRoot(root, maxBytes, warn))
+    await scanRoot(root, maxBytes, warn, entries)
   }
-  return { entries }
+  return { entries: [...entries.values()] }
 }
 
-async function scanRoot(root: string, maxBytes: number, warn: Warn): Promise<PromptEntry[]> {
+async function scanRoot(
+  root: string,
+  maxBytes: number,
+  warn: Warn,
+  entries: Map<string, PromptEntry>,
+): Promise<void> {
   let dirents: Dirent[]
   try {
     dirents = await readdir(root, { recursive: true, withFileTypes: true })
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      warn(`model-prompt：提示词目录不存在，已跳过：${root}`)
-      return []
+      return
     }
     throw error
   }
-  const entries: PromptEntry[] = []
   for (const dirent of dirents) {
-    if (dirent.isDirectory()) continue
-    if (!dirent.name.endsWith('.md')) continue
+    if (dirent.isDirectory() || !dirent.name.endsWith('.md')) {
+      continue
+    }
     const fullPath = path.join(dirent.parentPath, dirent.name)
     const relativePath = toRelativePath(root, fullPath)
-    if (isUnderHiddenDirectory(relativePath)) continue
+    if (entries.has(relativePath) || isUnderHiddenDirectory(relativePath)) {
+      continue
+    }
     const entry = await readEntry(fullPath, relativePath, maxBytes, warn)
-    if (entry !== undefined) entries.push(entry)
+    if (entry !== undefined) {
+      entries.set(relativePath, entry)
+    }
   }
-  return entries
 }
 
 /** 统计、读取并校验单个文件；任何不合格都记录原因后跳过。 */

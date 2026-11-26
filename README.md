@@ -1,6 +1,6 @@
 # dsh-model-prompt
 
-不同模型在推理习惯、工具调用与输出格式上各有差异，混用多模型或派发子代理时往往需要针对模型补充特定约束。若把这些约束直接写进 DSH 配置档案，换机器或切换 profile 就得重新维护。`dsh-model-prompt` 从跨设备通用目录 `~/.agents/model-prompts` 读取提示词文件，按当前会话或子代理实际选用的模型匹配并注入系统提示词，让模型专属指导能随 dotfiles 同步，与 DSH 自身的配置档案解耦。
+`dsh-model-prompt` 从当前配置档、DSH 全局目录和 `~/.agents/model-prompts` 读取模型专属提示词，按会话或子代理实际选用的模型匹配并注入系统提示词。
 
 ## 功能
 
@@ -10,7 +10,7 @@
 | 多文件叠加 | 多个文件同时命中时按 `priority` 升序排列，同优先级按相对路径升序拼接 |
 | 会话与子代理独立匹配 | 每次执行步骤前读取当前步骤的模型选择，根会话与子代理各自按自身使用的模型匹配提示词 |
 | 模型切换时替换头部 | 匹配结果变化时直接用新文本替换系统提示词头部，不以追加方式残留旧模型的过期指导 |
-| 跨设备同步 | 提示词存放在独立于 DSH 配置的普通文件目录中，纳入 dotfiles 即可在所有设备上生效 |
+| 跨设备同步 | `~/.agents/model-prompts` 可纳入 dotfiles，在多台设备上共享提示词 |
 | 热更新 | 目录内文件变化后自动重新扫描，下一轮请求即应用新内容 |
 
 ## 安装
@@ -30,9 +30,21 @@ dsh plugin --profile web add ./dsh-model-prompt
 
 或在 DSH Web 的「插件」管理页安装。它是 Bundle，安装后自动挂载。
 
+## 提示词目录
+
+默认目录按优先级从高到低排列。
+
+1. `<DSH_HOME>/profiles/<profile>/config/dsh-model-prompt/`
+2. `<DSH_HOME>/profiles/<profile>/dsh-model-prompts/`
+3. `<DSH_HOME>/config/dsh-model-prompt/`
+4. `<DSH_HOME>/model-prompts/`
+5. `~/.agents/model-prompts/`
+
+`<profile>` 是本次启动使用的配置档。加载器跳过缺失的目录，递归读取 `.md` 文件，并跳过以 `.` 开头的子目录。同一相对路径只加载最靠前的有效文件，然后再按 `match` 筛选当前模型可用的提示词。不同相对路径的文件可以同时生效，按 `priority` 升序拼接，同值时按相对路径升序拼接。
+
 ## 提示词文件格式
 
-目录默认是 `~/.agents/model-prompts`，加载器会递归读取其中所有 `.md` 文件，并跳过以 `.` 开头的目录。每个文件必须带有 YAML frontmatter：
+每个文件必须带有 YAML frontmatter。
 
 ```markdown
 ---
@@ -75,7 +87,7 @@ priority: 10
 | 键 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- |
 | `enabled` | boolean | `true` | 置 `false` 时不注册任何资源 |
-| `promptRoots` | string[] | `['~/.agents/model-prompts']`（`DSH_AGENTS_HOME` 非空时前置其下 `model-prompts`） | 提示词根目录，仅展开开头的 `~/` |
+| `promptRoots` | string[] | 上述五级目录 | 显式设置时替换默认目录列表，按数组顺序确定优先级，仅展开开头的 `~/`。设为 `[]` 时跳过目录扫描 |
 | `maxBytes` | number | `65536` | 单个文件字节上限 |
 | `announce` | boolean | `true` | 是否在注入文本前附带"仅适用于当前模型"的声明头 |
 | `watch` | boolean | `true` | 是否监听目录变化并热更新 |
@@ -90,7 +102,7 @@ priority: 10
 
 上面这行只改单文件上限，其余键仍取默认值。
 
-注意不要无谓地显式写出 `promptRoots`。它的默认值会读取 `DSH_AGENTS_HOME`，一旦写死就固定成了那一个目录。
+此前通过 `DSH_AGENTS_HOME` 指向自定义目录的用户，可通过 `promptRoots` 列出所需目录，并包含该自定义目录下的 `model-prompts`。
 
 ## 使用
 
@@ -113,8 +125,6 @@ priority: 10
 ln -s ~/dotfiles/agents/model-prompts ~/.agents/model-prompts
 ```
 
-当环境变量 `DSH_AGENTS_HOME` 指向自定义 agents 根目录时，默认提示词目录也会随之改变，便于与其他 agent 工具共用同一份提示词。
-
 ## 行为与边界
 
 - **注入位置**：注入内容位于系统提示词中部署 persona 之后、计划策略与工具说明之前。
@@ -135,6 +145,6 @@ ln -s ~/dotfiles/agents/model-prompts ~/.agents/model-prompts
 ```bash
 pnpm install
 pnpm typecheck   # 宿主源码 + 测试源码类型检查
-pnpm test        # 纯函数测试（frontmatter 解析、正则匹配、排序拼接、路径展开）
+pnpm test        # 运行提示词解析、匹配、排序和目录优先级测试
 pnpm build       # 输出 lib/
 ```

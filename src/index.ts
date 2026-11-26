@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { join } from 'node:path'
 import chokidar from 'chokidar'
 import type { Context } from '@deepseek-ai/cordis'
 import { Config } from './config.ts'
@@ -16,7 +17,7 @@ export { Config }
 export const name = '@dsh-plugin/dsh-model-prompt'
 
 /** 严格注入检查要求列出 apply 内访问的全部服务。 */
-export const inject = ['systemPrompt']
+export const inject = ['profileContext', 'systemPrompt']
 
 /** 目录事件去抖窗口，避免一次保存触发多轮扫描。 */
 const RESCAN_DEBOUNCE_MS = 150
@@ -31,7 +32,14 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
     return
   }
   const warn = (message: string) => ctx.logger.warn(message)
-  const roots = resolveRoots(config.promptRoots)
+  const { dir, home } = ctx.profileContext
+  const roots = resolveRoots(config.promptRoots ?? [
+    join(dir, 'config', 'dsh-model-prompt'),
+    join(dir, 'dsh-model-prompts'),
+    join(home, 'config', 'dsh-model-prompt'),
+    join(home, 'model-prompts'),
+    '~/.agents/model-prompts',
+  ])
 
   let snapshot: PromptSnapshot
   try {
@@ -92,10 +100,10 @@ export async function apply(ctx: Context, config: PluginConfig): Promise<void> {
     let disposed = false
     // 去抖只合并调度，不取消已在飞的扫描；迟到的旧扫描不得覆盖新快照。
     let scanGeneration = 0
+    // 统一去抖目录与文件事件，确保短暂存在的覆盖文件删除后也会重扫。
     const watcher = chokidar.watch(roots, {
       ignoreInitial: true,
       depth: 3,
-      awaitWriteFinish: { stabilityThreshold: 150, pollInterval: 50 },
     })
     const rescan = () => {
       timer = undefined
