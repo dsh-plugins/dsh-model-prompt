@@ -1,0 +1,15 @@
+[
+  {
+    "name": {
+      "zh-CN": "模型专用提示词",
+      "en": "Model-specific prompts"
+    },
+    "desc": {
+      "zh-CN": "迁移当前配置档按模型加载的提示词文件。",
+      "en": "Share model-specific prompt files from the current profile."
+    },
+    "paths": [
+      "profiles/<profile>/dsh-model-prompts"
+    ]
+  }
+]

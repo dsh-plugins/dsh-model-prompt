@@ -23,6 +23,7 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "dsh_pack",
     "lib",
     "cordis.patch.yml",
     "icon.svg",
