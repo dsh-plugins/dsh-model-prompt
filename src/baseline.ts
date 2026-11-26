@@ -1,6 +1,18 @@
 import { createHash } from 'node:crypto'
 import type { SessionLike } from './host.ts'
 
+/** 段落名称用于关联宿主的注册项和会话事件。 */
+export const PROMPT_SECTION_NAME = 'model-prompts'
+
+type SectionUpdate =
+  | { readonly name: string; readonly state: 'active'; readonly contentIndex: number }
+  | { readonly name: string; readonly state: 'retired' }
+
+interface SystemMessage {
+  readonly content?: readonly { readonly type?: unknown; readonly text?: unknown }[]
+  readonly source?: { readonly sections?: readonly SectionUpdate[]; readonly reset?: true }
+}
+
 /**
  * 注入全文的稳定摘要。
  *
@@ -38,14 +50,10 @@ export function recoverBaselineDigest(session: SessionLike): string | undefined 
 }
 
 /**
- * 判断会话当前生效的系统提示词是否已经包含本次贡献。
- *
- * 只比较摘要无法发现"头部被别的状态覆盖过"的情况：插件卸载期间宿主会用
- * 不含本插件段落的文本重写头部，而日志里旧摘要仍在，摘要比较会误判为
- * 未变化，注入就此丢失。因此在内存基线缺失时对照真实文本核验一次。
+ * 核对会话中实际生效的模型提示词，以识别宿主重置后仍留有旧摘要的情况。
  * @param session - 目标会话。
  * @param contribution - 本次应注入的完整文本。
- * @returns 生效的系统消息已包含该文本时为 true；contribution 为空串时恒为 true。
+ * @returns 贡献为空或对应的提示词仍生效时为 true。
  */
 export function sessionShowsContribution(session: SessionLike, contribution: string): boolean {
   if (contribution === '') return true
@@ -55,12 +63,29 @@ export function sessionShowsContribution(session: SessionLike, contribution: str
     if (seq === undefined) continue
     const event = session.eventAt(seq)
     if (event?.type !== 'system/message') continue
-    const message = event.data as { message?: { content?: readonly { type?: unknown; text?: unknown }[] } } | undefined
-    const blocks = message?.message?.content ?? []
+    const data = event.data as { readonly message?: SystemMessage } | null | undefined
+    const message = data?.message
+    const blocks = message?.content ?? []
+    const source = message?.source
+    if (source?.sections !== undefined) {
+      const section = source.sections.find(update => update.name === PROMPT_SECTION_NAME)
+      if (section !== undefined) {
+        if (section.state === 'retired') {
+          return false
+        }
+        const block = blocks[section.contentIndex]
+        return block?.type === 'text' && block.text === contribution
+      }
+      if (source.reset === true) {
+        return false
+      }
+      continue
+    }
+    // 旧版宿主的非休眠系统消息保存整份提示词。
     const text = blocks.map(block => (block.type === 'text' && typeof block.text === 'string' ? block.text : '')).join('')
-    // 空文本是休眠节点，不承载提示词；继续向前找真正生效的那条。
-    if (text === '') continue
-    return text.includes(contribution)
+    if (text !== '') {
+      return text.includes(contribution)
+    }
   }
   return false
 }

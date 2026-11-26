@@ -92,6 +92,65 @@ describe('sessionShowsContribution', () => {
     return { type: 'system/message', data: { message: { content: [{ type: 'text', text }] } } }
   }
 
+  const modelSection = { name: 'model-prompts', state: 'active', contentIndex: 0 } as const
+  const otherSection = { name: 'example', state: 'active', contentIndex: 0 } as const
+
+  function sectionMessage(
+    content: readonly string[],
+    source: {
+      sections: readonly { name: string; state: 'active' | 'retired'; contentIndex?: number }[]
+      reset?: true
+    },
+  ): SessionEventLike {
+    return {
+      type: 'system/message',
+      data: {
+        message: {
+          content: content.map(text => ({ type: 'text', text })),
+          source: { kind: 'system-prompt', ...source },
+        },
+      },
+    }
+  }
+
+  test('其他段落增量更新后模型提示词仍然生效', () => {
+    const events = new Map<number, SessionEventLike>([
+      [1, sectionMessage([contribution], { sections: [modelSection] })],
+      [2, sectionMessage(['其他段落的变更'], { sections: [otherSection] })],
+      [3, sectionMessage([], { sections: [] })],
+    ])
+    assert.equal(sessionShowsContribution(session([1, 2, 3], events), contribution), true)
+  })
+
+  test('按内容索引检查模型段落的最新版本', () => {
+    const events = new Map<number, SessionEventLike>([
+      [1, sectionMessage([contribution], { sections: [modelSection] })],
+      [2, sectionMessage([contribution, '模型提示词已更新'], {
+        sections: [otherSection, { ...modelSection, contentIndex: 1 }],
+      })],
+    ])
+    assert.equal(sessionShowsContribution(session([1, 2], events), contribution), false)
+    assert.equal(sessionShowsContribution(session([1, 2], events), '模型提示词已更新'), true)
+  })
+
+  test('停用标记会使历史模型段落失效', () => {
+    const events = new Map<number, SessionEventLike>([
+      [1, sectionMessage([contribution], { sections: [modelSection] })],
+      [2, sectionMessage([], { sections: [{ name: modelSection.name, state: 'retired' }] })],
+    ])
+    assert.equal(sessionShowsContribution(session([1, 2], events), contribution), false)
+  })
+
+  test('整份提示词被重置后仅使用重置时写入的段落', () => {
+    const events = new Map<number, SessionEventLike>([
+      [1, sectionMessage([contribution], { sections: [modelSection] })],
+      [2, sectionMessage([], { sections: [], reset: true })],
+      [3, sectionMessage([contribution], { sections: [modelSection], reset: true })],
+    ])
+    assert.equal(sessionShowsContribution(session([1, 2], events), contribution), false)
+    assert.equal(sessionShowsContribution(session([1, 2, 3], events), contribution), true)
+  })
+
   test('contributions 为空串时恒为 true', () => {
     assert.equal(sessionShowsContribution(session([], new Map()), ''), true)
   })
@@ -124,8 +183,8 @@ describe('sessionShowsContribution', () => {
 
   test('结构异常的系统消息不会抛错', () => {
     const events = new Map<number, SessionEventLike>([
-      [1, { type: 'system/message', data: null }],
-      [2, systemMessage(contribution)],
+      [1, systemMessage(contribution)],
+      [2, { type: 'system/message', data: null }],
     ])
     assert.equal(sessionShowsContribution(session([1, 2], events), contribution), true)
   })

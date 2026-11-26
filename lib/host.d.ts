@@ -60,7 +60,7 @@ export type PreStepDecision = {
 } | {
     readonly kind: 'enter';
     readonly messages: readonly unknown[];
-    /** 置 true 使宿主把本步作为新请求系列起点，即以新文本替换头部系统节点。 */
+    /** 将本步标记为新请求系列的起点。 */
     readonly startsRequestSeries?: true;
 };
 export interface PreStepPayload {
